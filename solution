@@ -1,0 +1,37 @@
+#!/bin/bash
+
+#! My GitHub raw link to pull LOG data
+LOG_URL="https://raw.githubusercontent.com/Abra7am/marathon/refs/heads/main/logs.txt"
+
+#! Download the entire log file
+curl -Ls "$LOG_URL" > apache_logs.txt
+
+#! Number of Unique IPs (Here number includes all IPs regardless of http 200 or else!)
+unique_ips=$(awk '{ print $1 }' apache_logs.txt | sort | uniq | wc -l)
+
+#! Process the log file
+cat apache_logs.txt | awk -v unique_ips="$unique_ips" '
+{
+    if ($9 == 200 && $10 ~ /^[0-9]+$/) { # Process only valid entries with status 200 (only successful donwloads!!!)
+        ip[$1] += $10;           # Accumulate download size per IP
+        total += $10;            # Track total downloaded size
+    }
+}
+END {
+    # Check if there are any valid entries for size calculation
+    if (length(ip) == 0) {
+        print "No valid log entries found!"
+        exit 1
+    }
+
+    # Print the total unique IP count
+    printf "There are %d unique ips\n", unique_ips;
+
+    # Print total downloaded size in bytes and GiB
+    printf "Total downloaded: %d (%.2fGiB)\n", total, total / (1024 * 1024 * 1024);
+
+    # Prepare output for sorting
+    for (i in ip) {
+        printf "%-15s %9d\n", i, ip[i]; # Print individual IP sizes in bytes
+    }
+}' | (head -2; tail -n +3 | sort -k2,2nr -k1,1 | head -15)
